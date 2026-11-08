@@ -22,6 +22,30 @@
 | 📤 匯出 | CSV（Excel 開，有每日總結＋明細）、JSON 備份／還原 |
 | 🌙 深色模式 | 跟隨系統，亦可手動切換 |
 | 📴 離線 | 加到主畫面後完全離線都用得 |
+| 📅 連動更表 | 讀你自己的 Firebase 更表：首頁顯示今日更份，OT 按更份時數計；「更表」tab 月曆同時顯示實際當值 |
+
+## 同你自己的「更表」連動
+
+更簿會以**唯讀**方式讀你嘅私人更表（Firebase project `daniel-shift`），做到：
+
+- 首頁顯示今日更份：`B 更 · 15:30–01:06`，休息日會顯示「今日休息」
+- **OT 按當日更份時數計**（A/B/C/E 都係 9:36，跨夜自動處理；休息日開工全部當 OT）
+- 「更表」tab：月曆有齊更份、實際當值、OT，一撳睇當日詳情
+- 反方向：更表 App 每格會顯示你實際打卡時數（同一個網域嘅 localStorage）
+
+要換 Firebase 專案，改 `app.js` 頂部：
+
+```js
+var ROSTER = {
+  project: 'daniel-shift',
+  apiKey: 'AIza...',      // Firebase web API key（公開無妨，讀取由 Firestore rules 控制）
+  editorUrl: 'https://d-hkd.github.io/shift-roster/'
+};
+```
+
+> 兩個 App 要放喺同一個 GitHub Pages 帳戶網域（`xxx.github.io`）先會共享資料。
+> ⚠️ iOS 上兩個「已加到主畫面」的 PWA 儲存空間係分開嘅，所以「更表顯示實際打卡」喺 iOS 要用 Safari 分頁開先會見到；Android 同桌面就正常。
+
 
 ## 點用（手機）
 
