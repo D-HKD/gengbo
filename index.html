@@ -174,8 +174,10 @@
         </div>
 
         <div class="progress" id="dutyProgress"><i id="dutyBar"></i></div>
-        <div class="progress-legend">
+        <div class="hero-meta">
+          <span class="shift-chip hidden" id="shiftChip"></span>
           <span id="legendStart">未開始</span>
+          <span class="sep">·</span>
           <span id="legendTarget">目標 9:36</span>
         </div>
 
@@ -282,6 +284,56 @@
       </div>
 
       <div class="spacer" style="height:22px"></div>
+    </section>
+
+    <!-- ================= ROSTER ================= -->
+    <section class="view" id="view-roster">
+      <div class="view-head">
+        <div>
+          <h1>更表</h1>
+          <div class="sub" id="rosterSub">讀取中…</div>
+        </div>
+        <button class="icon-btn" id="btnRosterRefresh" aria-label="重新整理更表">
+          <svg><use href="#i-refresh"/></svg>
+        </button>
+      </div>
+
+      <div class="cal-head">
+        <div class="cal-month" id="calMonth">2026年 11月</div>
+        <div class="cal-nav">
+          <button data-act="cal-prev" aria-label="上一個月">‹</button>
+          <button data-act="cal-today" aria-label="返去今個月" style="width:38px;font-size:11px">今</button>
+          <button data-act="cal-next" aria-label="下一個月">›</button>
+        </div>
+      </div>
+
+      <div class="cal-weekdays">
+        <span>日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span>
+      </div>
+      <div class="cal-grid" id="calGrid"></div>
+
+      <div class="cal-summary" id="calSummary"></div>
+
+      <div class="cal-legend">
+        <span><i style="background:rgba(46,196,182,.5)"></i>A</span>
+        <span><i style="background:rgba(76,141,255,.5)"></i>B</span>
+        <span><i style="background:rgba(176,124,255,.5)"></i>C</span>
+        <span><i style="background:rgba(232,163,61,.5)"></i>E</span>
+        <span><i style="background:var(--surface-3)"></i>休</span>
+        <span style="margin-left:auto;color:var(--green)">綠字＝實際當值</span>
+        <span style="color:var(--amber)">橙字＝有 OT</span>
+      </div>
+
+      <div class="spacer"></div>
+      <a class="btn btn-ghost btn-block" id="btnRosterEdit" href="https://d-hkd.github.io/shift-roster/" target="_blank" rel="noopener">
+        <svg><use href="#i-edit"/></svg>去更表 App 改更期
+      </a>
+
+      <div class="spacer"></div>
+      <div class="note-box">
+        <svg><use href="#i-info"/></svg>
+        <span>更期直接由你嘅 Firebase 更表讀取，只讀唔改。冇網時會用上次讀到嘅資料；開一次網就會自動更新。</span>
+      </div>
     </section>
 
     <!-- ================= SETTINGS ================= -->
@@ -397,7 +449,7 @@
 
       <div class="note-box">
         <svg><use href="#i-shield-lock"/></svg>
-        <span>所有紀錄只會儲存喺你部電話嘅瀏覽器（localStorage），唔會上載到任何伺服器。更簿冇帳戶、冇雲端、冇追蹤。建議避免輸入完整身份證號碼等敏感資料；換電話或清除瀏覽器資料前，記得先匯出備份。</span>
+        <span>你嘅打卡同案件紀錄只會儲存喺呢部電話（localStorage），唔會上載到任何伺服器。更簿冇帳戶、冇追蹤。唯一嘅網絡請求係向你自己的 Firebase 讀取「更表」更期（只讀，用嚟顯示今日更份同計 OT）。建議避免輸入完整身份證號碼等敏感資料；換電話或清除瀏覽器資料前，記得先匯出備份。</span>
       </div>
 
       <div class="spacer"></div>
@@ -418,7 +470,7 @@
   <button class="tab" data-tab="cases"><svg><use href="#i-folder"/></svg><span>案件</span></button>
   <button class="tab" data-tab="log"><svg><use href="#i-list"/></svg><span>紀錄</span></button>
   <button class="tab" data-tab="stats"><svg><use href="#i-chart"/></svg><span>統計</span></button>
-  <button class="tab" data-tab="settings"><svg><use href="#i-settings"/></svg><span>設定</span></button>
+  <button class="tab" data-tab="roster"><svg><use href="#i-calendar"/></svg><span>更表</span></button>
 </nav>
 
 <!-- ===== Sheet ===== -->
