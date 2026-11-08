@@ -1,0 +1,5 @@
+# 本機測試工具（唔會上載）
+_tools/
+_shots/
+.DS_Store
+Thumbs.db
