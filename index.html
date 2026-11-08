@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="zh-Hant-HK" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<meta name="theme-color" content="#0b0f17" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#eef2f8" media="(prefers-color-scheme: light)">
+<meta name="description" content="更簿 — 一鍵記錄返工、放工、接案件、攞口供同處理案件嘅時間。資料只存喺你部電話。">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="更簿">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="format-detection" content="telephone=no">
+<title>更簿 · 執勤記錄</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="icon" href="icons/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<!-- ========== SVG sprite ========== -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-door-in" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h8"/><path d="M3 12h11"/><path d="m10 8 4 4-4 4"/>
+    </symbol>
+    <symbol id="i-door-out" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M10 3h8a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-8"/><path d="M14 12H3"/><path d="m7 8-4 4 4 4"/>
+    </symbol>
+    <symbol id="i-folder" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4 20a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h4l2.5 3H20a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2Z"/><path d="M12 11v6"/><path d="M9 14h6"/>
+    </symbol>
+    <symbol id="i-pen" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/>
+    </symbol>
+    <symbol id="i-briefcase" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="2" y="7" width="20" height="14" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M2 13h20"/>
+    </symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-4"/>
+    </symbol>
+    <symbol id="i-car" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M5 17H3v-5l2-5h14l2 5v5h-2"/><path d="M3 12h18"/><circle cx="7.5" cy="17" r="2"/><circle cx="16.5" cy="17" r="2"/>
+    </symbol>
+    <symbol id="i-cuffs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="6" cy="12" r="3.2"/><circle cx="18" cy="12" r="3.2"/><path d="M9.2 12h5.6"/><path d="M6 8.8V5"/><path d="M18 8.8V5"/>
+    </symbol>
+    <symbol id="i-doc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/><path d="M8 13h8"/><path d="M8 17h5"/>
+    </symbol>
+    <symbol id="i-users" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13A4 4 0 0 1 19 7a4 4 0 0 1-3 3.87"/>
+    </symbol>
+    <symbol id="i-target" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.2" fill="currentColor"/>
+    </symbol>
+    <symbol id="i-cup" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M17 8h1a3 3 0 0 1 0 6h-1"/><path d="M3 8h14v7a5 5 0 0 1-5 5H8a5 5 0 0 1-5-5Z"/><path d="M6 2v2"/><path d="M10 2v2"/><path d="M14 2v2"/>
+    </symbol>
+    <symbol id="i-coffee" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M18 8h1a3 3 0 0 1 0 6h-1"/><path d="M3 8h15v6a5 5 0 0 1-5 5H8a5 5 0 0 1-5-5Z"/><path d="M6 2v3"/><path d="M10 2v3"/>
+    </symbol>
+    <symbol id="i-dots" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+      <circle cx="5" cy="12" r="1.4" fill="currentColor"/><circle cx="12" cy="12" r="1.4" fill="currentColor"/><circle cx="19" cy="12" r="1.4" fill="currentColor"/>
+    </symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.2 2"/>
+    </symbol>
+    <symbol id="i-list" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/>
+    </symbol>
+    <symbol id="i-chart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3 3v18h18"/><path d="M7 15v3"/><path d="M12 9v9"/><path d="M17 5v13"/>
+    </symbol>
+    <symbol id="i-settings" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9v.09a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/>
+    </symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+      <path d="M12 5v14"/><path d="M5 12h14"/>
+    </symbol>
+    <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round">
+      <path d="m18 6-12 12"/><path d="m6 6 12 12"/>
+    </symbol>
+    <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+      <path d="m20 6-11 11-5-5"/>
+    </symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/>
+    </symbol>
+    <symbol id="i-edit" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.1 2.1 0 0 1 3 3L12 15l-4 1 1-4Z"/>
+    </symbol>
+    <symbol id="i-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/>
+    </symbol>
+    <symbol id="i-upload" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5"/><path d="M12 3v12"/>
+    </symbol>
+    <symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+      <circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>
+    </symbol>
+    <symbol id="i-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="m9 6 6 6-6 6"/>
+    </symbol>
+    <symbol id="i-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round">
+      <circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M19.1 4.9l-1.4 1.4M6.3 17.7l-1.4 1.4"/>
+    </symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/>
+    </symbol>
+    <symbol id="i-shield-lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><rect x="9" y="11" width="6" height="5" rx="1"/><path d="M10.5 11V9.5a1.5 1.5 0 0 1 3 0V11"/>
+    </symbol>
+    <symbol id="i-user" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"/>
+    </symbol>
+    <symbol id="i-calendar" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 11h18"/>
+    </symbol>
+    <symbol id="i-alert" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="9"/><path d="M12 8v5"/><path d="M12 16h.01"/>
+    </symbol>
+    <symbol id="i-bolt" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M13 2 4 14h7l-1 8 9-12h-7Z"/>
+    </symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/>
+    </symbol>
+    <symbol id="i-info" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><path d="M12 7.5h.01"/>
+    </symbol>
+    <symbol id="i-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M5 12h14"/><path d="m13 6 6 6-6 6"/>
+    </symbol>
+    <symbol id="i-github" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M12 .5a12 12 0 0 0-3.8 23.4c.6.1.8-.3.8-.6v-2c-3.3.7-4-1.6-4-1.6-.6-1.4-1.4-1.8-1.4-1.8-1-.7 0-.7 0-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.7 1.3 3.4 1 .1-.8.4-1.3.7-1.6-2.7-.3-5.5-1.3-5.5-5.9 0-1.3.5-2.4 1.2-3.2-.1-.3-.5-1.5.1-3.2 0 0 1-.3 3.3 1.2a11.5 11.5 0 0 1 6 0c2.3-1.5 3.3-1.2 3.3-1.2.6 1.7.2 2.9.1 3.2.8.8 1.2 1.9 1.2 3.2 0 4.6-2.8 5.6-5.5 5.9.4.4.8 1.1.8 2.2v3.3c0 .3.2.7.8.6A12 12 0 0 0 12 .5Z"/>
+    </symbol>
+  </defs>
+</svg>
+
+<div class="app">
+
+  <!-- ===== Top bar ===== -->
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark">
+        <svg><use href="#i-clock"/></svg>
+      </div>
+      <div class="brand-txt">
+        <span class="brand-name">更簿</span>
+        <span class="brand-sub">GENG BO · DUTY LOG</span>
+      </div>
+    </div>
+    <div class="top-actions">
+      <button class="icon-btn" id="btnTheme" aria-label="切換主題"><svg><use href="#i-moon"/></svg></button>
+      <button class="icon-btn" id="btnGotoSettings" aria-label="設定"><svg><use href="#i-settings"/></svg></button>
+    </div>
+  </header>
+
+  <main>
+    <!-- ================= HOME ================= -->
+    <section class="view is-on" id="view-home">
+      <div class="hero" id="hero">
+        <div class="hero-top">
+          <span class="status-pill" id="statusPill"><i class="pip"></i><span>未返工</span></span>
+          <span class="muted" id="todayLabel" style="font-size:12px"></span>
+        </div>
+
+        <div class="hero-clock">
+          <span class="clock-big" id="dutyBig">0:00</span>
+          <span class="clock-sec" id="dutySec">:00</span>
+          <span class="clock-unit" id="dutyUnit">已當值</span>
+        </div>
+
+        <div class="progress" id="dutyProgress"><i id="dutyBar"></i></div>
+        <div class="progress-legend">
+          <span id="legendStart">未開始</span>
+          <span id="legendTarget">目標 9:36</span>
+        </div>
+
+        <div class="active-strip is-idle" id="activeStrip">
+          <span class="a-icon" id="activeIcon"><svg><use href="#i-bolt"/></svg></span>
+          <div class="a-body">
+            <div class="a-title" id="activeTitle">未有進行中嘅工作</div>
+            <div class="a-sub" id="activeSub">揀下面嘅工作開始計時</div>
+          </div>
+          <span class="a-time mono" id="activeTime"></span>
+        </div>
+
+        <button class="clock-btn" id="btnClock">
+          <svg id="clockIcon"><use href="#i-door-in"/></svg>
+          <span id="clockText">返工</span>
+        </button>
+      </div>
+
+      <div class="section-head">
+        <h2>而家做緊咩？</h2>
+        <span class="count" id="actionHint">撳一下即開始計時</span>
+      </div>
+      <div class="actions-grid" id="actionsGrid"></div>
+
+      <div class="section-head">
+        <h2>今日紀錄</h2>
+        <a class="link" href="#" data-goto="log">全部 <span id="todayCount"></span></a>
+      </div>
+      <div class="timeline" id="todayList"></div>
+      <div class="spacer"></div>
+    </section>
+
+    <!-- ================= CASES ================= -->
+    <section class="view" id="view-cases">
+      <div class="view-head">
+        <div>
+          <h1>案件</h1>
+          <div class="sub" id="casesSub">未有案件</div>
+        </div>
+        <button class="btn btn-primary btn-sm" id="btnNewCase">
+          <svg><use href="#i-plus"/></svg>新案件
+        </button>
+      </div>
+      <div class="search-wrap">
+        <svg><use href="#i-search"/></svg>
+        <input class="search" id="caseSearch" type="search" placeholder="搜尋案件編號、報案人、地點" autocomplete="off">
+      </div>
+      <div class="list" id="caseList"></div>
+      <div class="spacer"></div>
+      <div class="section-head"><h2>已完結</h2><span class="count" id="closedCount"></span></div>
+      <div class="list" id="closedList"></div>
+    </section>
+
+    <!-- ================= LOG ================= -->
+    <section class="view" id="view-log">
+      <div class="view-head">
+        <div>
+          <h1>紀錄</h1>
+          <div class="sub" id="logSub"></div>
+        </div>
+        <button class="btn btn-ghost btn-sm" id="btnManual">
+          <svg><use href="#i-plus"/></svg>補錄
+        </button>
+      </div>
+      <div class="list" id="logList"></div>
+      <div class="spacer"></div>
+    </section>
+
+    <!-- ================= STATS ================= -->
+    <section class="view" id="view-stats">
+      <div class="view-head">
+        <div>
+          <h1>統計</h1>
+          <div class="sub" id="statsRange"></div>
+        </div>
+      </div>
+
+      <div class="segmented" id="periodSeg">
+        <button data-period="today" class="is-on">今日</button>
+        <button data-period="week">本週</button>
+        <button data-period="month">本月</button>
+        <button data-period="custom">自訂</button>
+      </div>
+
+      <div class="stat-grid" id="statGrid"></div>
+
+      <div class="section-head"><h2>每日當值</h2><span class="count" id="chartNote"></span></div>
+      <div class="card panel-pad">
+        <div class="chart" id="chart"></div>
+      </div>
+
+      <div class="section-head"><h2>時間分佈</h2><span class="count" id="breakdownTotal"></span></div>
+      <div class="card panel-pad">
+        <div class="breakdown" id="breakdown"></div>
+      </div>
+
+      <div class="section-head"><h2>案件工時</h2><span class="count" id="caseTimeNote"></span></div>
+      <div class="list" id="caseTimeList"></div>
+
+      <div class="spacer"></div>
+      <div class="btn-row">
+        <button class="btn btn-ghost" id="btnExportCsv"><svg><use href="#i-download"/></svg>匯出 CSV</button>
+        <button class="btn btn-ghost" id="btnExportJson"><svg><use href="#i-download"/></svg>備份</button>
+      </div>
+
+      <div class="spacer" style="height:22px"></div>
+    </section>
+
+    <!-- ================= SETTINGS ================= -->
+    <section class="view" id="view-settings">
+      <div class="view-head">
+        <div>
+          <h1>設定</h1>
+          <div class="sub">資料只存喺呢部電話</div>
+        </div>
+      </div>
+
+      <div class="set-group">
+        <button class="set-row" id="setName">
+          <span class="s-ico"><svg><use href="#i-user"/></svg></span>
+          <span class="s-main">
+            <span class="s-t">姓名 / 警號</span>
+            <span class="s-s">顯示喺匯出報表（可留空）</span>
+          </span>
+          <span class="s-val" id="nameVal">未設定</span>
+        </button>
+        <div class="set-row">
+          <span class="s-ico"><svg><use href="#i-target"/></svg></span>
+          <span class="s-main">
+            <span class="s-t">每日目標工時</span>
+            <span class="s-s">超過呢個時數會計 OT</span>
+          </span>
+          <span class="target-edit">
+            <input id="targetH" type="number" min="0" max="24" inputmode="numeric" aria-label="目標小時">
+            <span>時</span>
+            <input id="targetM" type="number" min="0" max="59" inputmode="numeric" aria-label="目標分鐘">
+            <span>分</span>
+          </span>
+        </div>
+        <div class="set-row" id="rowDeductMeal">
+          <span class="s-ico"><svg><use href="#i-cup"/></svg></span>
+          <span class="s-main">
+            <span class="s-t">扣減用膳時間</span>
+            <span class="s-s">計 OT 同工時時扣走「用膳」紀錄</span>
+          </span>
+          <span class="switch" id="swDeductMeal" role="switch" aria-checked="false"></span>
+        </div>
+      </div>
+
+      <div class="set-group">
+        <div class="set-row" id="rowTheme">
+          <span class="s-ico"><svg><use href="#i-moon"/></svg></span>
+          <span class="s-main">
+            <span class="s-t">主題</span>
+            <span class="s-s">跟隨系統、淺色或深色</span>
+          </span>
+          <span class="s-val" id="themeVal">跟隨系統</span>
+        </div>
+        <div class="set-row" id="rowWake">
+          <span class="s-ico"><svg><use href="#i-bolt"/></svg></span>
+          <span class="s-main">
+            <span class="s-t">當值時保持螢幕長亮</span>
+            <span class="s-s">部電話唔會自動熄屏（視乎瀏覽器支援）</span>
+          </span>
+          <span class="switch" id="swWake" role="switch" aria-checked="false"></span>
+        </div>
+        <div class="set-row" id="rowHaptic">
+          <span class="s-ico"><svg><use href="#i-info"/></svg></span>
+          <span class="s-main">
+            <span class="s-t">按鍵震動</span>
+            <span class="s-s">撳打卡時輕微震一下</span>
+          </span>
+          <span class="switch is-on" id="swHaptic" role="switch" aria-checked="true"></span>
+        </div>
+      </div>
+
+      <div class="set-group">
+        <button class="set-row" id="setInstall">
+          <span class="s-ico"><svg><use href="#i-bolt"/></svg></span>
+          <span class="s-main">
+            <span class="s-t">加到手機主畫面</span>
+            <span class="s-s">當 App 咁用，全螢幕、離線都用得</span>
+          </span>
+          <svg style="width:16px;height:16px;color:var(--text-faint)"><use href="#i-chevron"/></svg>
+        </button>
+        <button class="set-row" id="setBackup">
+          <span class="s-ico"><svg><use href="#i-download"/></svg></span>
+          <span class="s-main">
+            <span class="s-t">匯出備份</span>
+            <span class="s-s">下載 JSON 檔，換電話都用得返</span>
+          </span>
+          <svg style="width:16px;height:16px;color:var(--text-faint)"><use href="#i-chevron"/></svg>
+        </button>
+        <button class="set-row" id="setRestore">
+          <span class="s-ico"><svg><use href="#i-upload"/></svg></span>
+          <span class="s-main">
+            <span class="s-t">還原備份</span>
+            <span class="s-s">從 JSON 檔匯入（會取代現有資料）</span>
+          </span>
+          <svg style="width:16px;height:16px;color:var(--text-faint)"><use href="#i-chevron"/></svg>
+        </button>
+        <button class="set-row" id="setDemo">
+          <span class="s-ico"><svg><use href="#i-bolt"/></svg></span>
+          <span class="s-main">
+            <span class="s-t">載入示範資料</span>
+            <span class="s-s">睇一睇實際用起上嚟係點</span>
+          </span>
+          <svg style="width:16px;height:16px;color:var(--text-faint)"><use href="#i-chevron"/></svg>
+        </button>
+        <button class="set-row is-danger" id="setReset">
+          <span class="s-ico" style="color:var(--red)"><svg><use href="#i-trash"/></svg></span>
+          <span class="s-main">
+            <span class="s-t">清除所有資料</span>
+            <span class="s-s">無法復原，建議先匯出備份</span>
+          </span>
+          <svg style="width:16px;height:16px;color:var(--text-faint)"><use href="#i-chevron"/></svg>
+        </button>
+      </div>
+
+      <div class="note-box">
+        <svg><use href="#i-shield-lock"/></svg>
+        <span>所有紀錄只會儲存喺你部電話嘅瀏覽器（localStorage），唔會上載到任何伺服器。更簿冇帳戶、冇雲端、冇追蹤。建議避免輸入完整身份證號碼等敏感資料；換電話或清除瀏覽器資料前，記得先匯出備份。</span>
+      </div>
+
+      <div class="spacer"></div>
+      <p class="muted" style="text-align:center;font-size:11.5px;line-height:1.8">
+        更簿 v1.0 · 開源喺 GitHub<br>
+        <a href="https://github.com/" target="_blank" rel="noopener" id="repoLink" style="display:inline-flex;align-items:center;gap:5px;margin-top:4px">
+          <svg style="width:14px;height:14px"><use href="#i-github"/></svg>原始碼
+        </a>
+      </p>
+      <div style="height:20px"></div>
+    </section>
+  </main>
+</div>
+
+<!-- ===== Tab bar ===== -->
+<nav class="tabbar" aria-label="主選單">
+  <button class="tab is-on" data-tab="home"><svg><use href="#i-clock"/></svg><span>打卡</span></button>
+  <button class="tab" data-tab="cases"><svg><use href="#i-folder"/></svg><span>案件</span></button>
+  <button class="tab" data-tab="log"><svg><use href="#i-list"/></svg><span>紀錄</span></button>
+  <button class="tab" data-tab="stats"><svg><use href="#i-chart"/></svg><span>統計</span></button>
+  <button class="tab" data-tab="settings"><svg><use href="#i-settings"/></svg><span>設定</span></button>
+</nav>
+
+<!-- ===== Sheet ===== -->
+<div class="sheet-backdrop" id="backdrop"></div>
+<div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
+  <div class="sheet-grab"></div>
+  <div class="sheet-head">
+    <h2 id="sheetTitle">標題</h2>
+    <button class="close" id="sheetClose" aria-label="關閉"><svg><use href="#i-x"/></svg></button>
+  </div>
+  <div id="sheetBody"></div>
+</div>
+
+<!-- ===== Toasts ===== -->
+<div class="toast-wrap" id="toasts"></div>
+
+<input type="file" id="fileInput" accept="application/json,.json" class="hidden">
+
+<script src="app.js"></script>
+</body>
+</html>
