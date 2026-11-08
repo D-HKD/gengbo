@@ -36,6 +36,21 @@
   var WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六'];
   var DAY = 86400000;
 
+  /* 更表（Firebase Firestore，公開讀取） */
+  var ROSTER = {
+    project: 'daniel-shift',
+    apiKey: 'AIzaSyBemgBWSqUa56Mlz_LlqZ-vQMxLvIALR2k',
+    editorUrl: 'https://d-hkd.github.io/shift-roster/',
+    ttl: 10 * 60000
+  };
+  var SHIFT_TYPE = {
+    A: { name: 'A 更', cls: 'a' },
+    B: { name: 'B 更', cls: 'b' },
+    C: { name: 'C 更', cls: 'c' },
+    E: { name: 'E 更', cls: 'e' },
+    OFF: { name: '休息', cls: 'off' }
+  };
+
   /* ---------------- 小工具 ---------------- */
   function $(s, r) { return (r || document).querySelector(s); }
   function $$(s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); }
@@ -130,7 +145,8 @@
         theme: 'auto', wake: false, haptic: true, seen: false
       },
       cases: [],
-      entries: []
+      entries: [],
+      rosters: {}
     };
   }
 
@@ -145,6 +161,7 @@
       s.settings = Object.assign(s.settings, d.settings || {});
       s.cases = Array.isArray(d.cases) ? d.cases : [];
       s.entries = Array.isArray(d.entries) ? d.entries.sort(byStart) : [];
+      s.rosters = d.rosters && typeof d.rosters === 'object' ? d.rosters : {};
       return s;
     } catch (e) {
       console.warn('讀取資料失敗', e);
@@ -164,6 +181,113 @@
 
   function byStart(a, b) { return a.s - b.s; }
   function targetMs() { return (Number(state.settings.target) || DEFAULT_TARGET) * 60000; }
+
+  /* ---------------- 更表 ---------------- */
+  function rosterFor(year) {
+    var r = state.rosters[String(year)];
+    return r && r.days ? r : null;
+  }
+
+  function shiftOn(dayMs) {
+    var r = rosterFor(new Date(dayMs).getFullYear());
+    if (!r) return null;
+    return r.days[dayKey(dayMs)] || null;
+  }
+
+  function shiftMins(s) {
+    if (!s || !s.start || !s.end) return null;
+    var a = String(s.start).split(':');
+    var b = String(s.end).split(':');
+    if (a.length < 2 || b.length < 2) return null;
+    var st = Number(a[0]) * 60 + Number(a[1]);
+    var en = Number(b[0]) * 60 + Number(b[1]);
+    if (en <= st) en += 1440;
+    return en - st;
+  }
+
+  function shiftMs(s) {
+    var m = shiftMins(s);
+    return m == null ? null : m * 60000;
+  }
+
+  /* 該日嘅目標工時：有更份就用更份長度，休息日 = 0 */
+  function dayTarget(dayStart) {
+    var s = shiftOn(dayStart);
+    if (s) {
+      if (s.type === 'OFF') return 0;
+      var ms = shiftMs(s);
+      if (ms) return ms;
+    }
+    return targetMs();
+  }
+
+  function rosterLabel(s) {
+    if (!s) return '未有更份';
+    if (s.type === 'OFF') return '休息日';
+    var t = SHIFT_TYPE[s.type];
+    return (t ? t.name : s.type) + ' · ' + (s.start || '') + '–' + (s.end || '');
+  }
+
+  function parseRosterDoc(doc) {
+    var days = {};
+    var fields = (doc && doc.fields) || {};
+    var map = fields.days && fields.days.mapValue && fields.days.mapValue.fields;
+    if (!map) return days;
+    Object.keys(map).forEach(function (k) {
+      var v = (map[k].mapValue && map[k].mapValue.fields) || {};
+      days[k] = {
+        type: v.type ? v.type.stringValue : '',
+        start: v.start ? v.start.stringValue : '',
+        end: v.end ? v.end.stringValue : '',
+        note: v.note ? v.note.stringValue : ''
+      };
+    });
+    return days;
+  }
+
+  var rosterBusy = false;
+
+  function fetchRoster(year, force) {
+    var key = String(year);
+    var cached = rosterFor(year);
+    if (!force && cached && Date.now() - (cached.at || 0) < ROSTER.ttl) {
+      return Promise.resolve(cached);
+    }
+    if (rosterBusy) return Promise.resolve(cached);
+    rosterBusy = true;
+    var url = 'https://firestore.googleapis.com/v1/projects/' + ROSTER.project +
+      '/databases/(default)/documents/rosters/' + year + '?key=' + ROSTER.apiKey;
+    return fetch(url, { cache: 'no-store' })
+      .then(function (res) {
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        return res.json();
+      })
+      .then(function (doc) {
+        var days = parseRosterDoc(doc);
+        if (!Object.keys(days).length) throw new Error('empty');
+        state.rosters[key] = { days: days, at: Date.now() };
+        save();
+        return state.rosters[key];
+      })
+      .catch(function (err) {
+        console.warn('更表讀取失敗：', err && err.message);
+        return cached;
+      })
+      .then(function (out) {
+        rosterBusy = false;
+        return out;
+      });
+  }
+
+  function ensureRoster(force) {
+    var y = new Date().getFullYear();
+    return fetchRoster(y, force).then(function (r) {
+      // 12 月順便攞埋下一年，方便跨年睇
+      var m = new Date().getMonth();
+      if (m >= 10) return fetchRoster(y + 1, force).then(function () { return r; });
+      return r;
+    });
+  }
 
   /* ---------------- 推導 ---------------- */
   function activeEntry() {
@@ -230,9 +354,10 @@
       }
     });
     var eff = Math.max(0, total - (state.settings.deductMeal ? meal : 0));
-    var tgt = targetMs();
+    var tgt = dayTarget(dayStart);
     return {
       total: total, meal: meal, effective: eff, open: sess.some(function (s) { return s.open; }),
+      target: tgt, shift: shiftOn(dayStart),
       ot: Math.max(0, eff - tgt), under: Math.max(0, tgt - eff)
     };
   }
@@ -262,7 +387,7 @@
       var st = dayStats(d);
       if (st.total > 0 || st.open) {
         workedDays++;
-        targetTotal += targetMs();
+        targetTotal += st.target;
         total += st.effective;
         ot += st.ot;
         meal += st.meal;
@@ -403,12 +528,25 @@
     var day = startOfDay(t);
     var st = dayStats(day);
     var status = statusOf(st);
+    var sh = st.shift;
     var hero = $('#hero');
+
+    if (!status.on && sh && sh.type === 'OFF') status = { on: false, text: '今日休息' };
 
     hero.classList.toggle('is-on', status.on);
 
     var pill = $('#statusPill');
     pill.innerHTML = '<i class="pip"></i><span>' + status.text + '</span>';
+
+    var chip = $('#shiftChip');
+    if (sh) {
+      var stype = SHIFT_TYPE[sh.type];
+      chip.className = 'shift-chip t-' + (stype ? stype.cls : 'off');
+      chip.textContent = rosterLabel(sh);
+      chip.classList.remove('hidden');
+    } else {
+      chip.classList.add('hidden');
+    }
 
     var total = st.total;
     var parts = fmtHMS(total).split(':');
@@ -416,10 +554,11 @@
     $('#dutySec').textContent = ':' + parts[2];
     $('#dutyUnit').textContent = status.on ? '今日當值' : '今日總當值';
 
-    var pct = Math.min(100, (total / targetMs()) * 100);
+    var tgt = st.target;
+    var pct = tgt > 0 ? Math.min(100, (total / tgt) * 100) : (total > 0 ? 100 : 0);
     var prog = $('#dutyProgress');
     $('#dutyBar').style.width = (total > 0 ? Math.max(1.5, pct) : 0) + '%';
-    prog.classList.toggle('is-ot', total > targetMs());
+    prog.classList.toggle('is-ot', tgt > 0 && total > tgt);
 
     var firstOn = null;
     for (var i = 0; i < state.entries.length; i++) {
@@ -427,9 +566,15 @@
       if (e.t === 'on' && e.s >= day) { firstOn = e; break; }
     }
     $('#legendStart').textContent = firstOn ? '返工 ' + fmtTime(firstOn.s) : '未開始';
-    $('#legendTarget').innerHTML = total > targetMs()
-      ? '<b class="' + 'ot' + '">OT +' + fmtHM(total - targetMs()) + '</b>'
-      : '目標 <b>' + hmToStr(state.settings.target) + '</b> · 尚餘 ' + fmtHM(targetMs() - total);
+    if (tgt <= 0) {
+      $('#legendTarget').innerHTML = total > 0
+        ? '<b class="ot">休息日開工 · OT +' + fmtHM(total) + '</b>'
+        : '休息日';
+    } else if (total > tgt) {
+      $('#legendTarget').innerHTML = '<b class="ot">OT +' + fmtHM(total - tgt) + '</b>';
+    } else {
+      $('#legendTarget').innerHTML = '目標 <b>' + fmtHM(tgt) + '</b> · 尚餘 ' + fmtHM(tgt - total);
+    }
 
     $('#todayLabel').textContent = fmtDateLabel(t);
 
@@ -655,7 +800,17 @@
     var days = [];
     for (var di = count - 1; di >= 0; di--) days.push(lastDay - di * DAY);
 
-    var maxV = targetMs() * 1.35;
+    // 每日目標可能唔同（更份），虛線用最常見嘅目標
+    var tgtCount = {};
+    days.forEach(function (d) {
+      var v = dayTarget(d);
+      tgtCount[v] = (tgtCount[v] || 0) + 1;
+    });
+    var tgtLine = Number(Object.keys(tgtCount).sort(function (a, b) {
+      return tgtCount[b] - tgtCount[a];
+    })[0]) || targetMs();
+
+    var maxV = tgtLine * 1.35;
     days.forEach(function (d) {
       var s = dayStats(d);
       maxV = Math.max(maxV, s.effective * 1.08);
@@ -665,16 +820,16 @@
       var s = dayStats(d);
       var pct = Math.max(0, Math.min(100, (s.effective / maxV) * 100));
       var isToday = d === todayKey;
-      var cls = s.effective > targetMs() ? ' is-ot' : (s.effective === 0 ? ' is-empty' : '');
+      var cls = s.effective > s.target ? ' is-ot' : (s.effective === 0 ? ' is-empty' : '');
       var label = count > 7 ? String(new Date(d).getDate()) : WEEKDAYS[new Date(d).getDay()];
       return '<div class="col" title="' + fmtDateShort(d) + ' · ' + fmtHM(s.effective) + '">' +
         '<div class="bar-wrap">' +
         '<div class="bar' + cls + (isToday ? ' is-today' : '') + '" style="height:' + pct + '%"></div>' +
-        '<div class="tgt" style="bottom:' + Math.min(100, (targetMs() / maxV) * 100) + '%"></div>' +
+        '<div class="tgt" style="bottom:' + Math.min(100, (tgtLine / maxV) * 100) + '%"></div>' +
         '</div><div class="x' + (isToday ? ' is-today' : '') + '">' + label + '</div></div>';
     }).join('');
     $('#chart').innerHTML = chartHTML;
-    $('#chartNote').textContent = '虛線 = 目標 ' + hmToStr(state.settings.target);
+    $('#chartNote').textContent = '虛線 = 目標 ' + fmtHM(tgtLine);
 
     // breakdown
     var entriesArr = Object.keys(st.byType).map(function (k) {
@@ -713,7 +868,128 @@
     });
   }
 
-  /* ---------------- 畫面：設定 ---------------- */
+  /* ---------------- 畫面：更表 ---------------- */
+  var calYear = null;
+  var calMonth = null;
+
+  function renderRoster() {
+    var t = now();
+    if (calYear == null) {
+      calYear = new Date(t).getFullYear();
+      calMonth = new Date(t).getMonth();
+    }
+    var year = calYear, month = calMonth;
+    var first = new Date(year, month, 1);
+    var monthLen = new Date(year, month + 1, 0).getDate();
+    var lead = first.getDay();
+    var todayKey = dayKey(t);
+
+    $('#calMonth').textContent = year + '年 ' + (month + 1) + '月';
+
+    var r = rosterFor(year);
+    var totalDays = r ? Object.keys(r.days).length : 0;
+    var todayShift = shiftOn(t);
+    var sub = todayShift ? '今日：' + rosterLabel(todayShift) : '今日：未有更份';
+    if (r && r.at) {
+      var mins = Math.round((t - r.at) / 60000);
+      sub += ' · 更新 ' + (mins < 1 ? '啱啱' : mins < 60 ? mins + '分鐘前' : Math.round(mins / 60) + '小時前');
+    } else if (!r) {
+      sub = '未能讀取更表（需要網絡一次）';
+    }
+    $('#rosterSub').textContent = sub;
+
+    var cells = [];
+    for (var i = 0; i < lead; i++) cells.push('<div class="cal-cell is-blank"></div>');
+
+    var monthDuty = 0, monthOt = 0, workedDays = 0, shifts = 0;
+
+    for (var dnum = 1; dnum <= monthLen; dnum++) {
+      var d = new Date(year, month, dnum);
+      var key = dayKey(d.getTime());
+      var sh = r ? r.days[key] : null;
+      var st = dayStats(d.getTime());
+      var cls = 'cal-cell';
+      if (key === todayKey) cls += ' is-today';
+      if (sh && sh.type === 'OFF') cls += ' is-off';
+      var codeHTML = '';
+      if (sh && sh.type) {
+        shifts++;
+        var stp = SHIFT_TYPE[sh.type];
+        codeHTML = '<span class="cal-code ' + (stp ? stp.cls : 'off') + '">' +
+          (sh.type === 'OFF' ? '休' : esc(sh.type)) + '</span>';
+      }
+      var actHTML = '';
+      if (st.total > 0) {
+        workedDays++;
+        monthDuty += st.effective;
+        monthOt += st.ot;
+        actHTML = '<span class="cal-actual' + (st.ot > 0 ? ' is-ot' : '') + '">' +
+          (st.ot > 0 ? '+' + fmtHM(st.ot) : fmtHM(st.total)) + '</span>';
+      }
+      cells.push('<button class="' + cls + '" data-act="cal-day" data-key="' + key + '">' +
+        '<span class="cal-num">' + dnum + '</span>' + codeHTML + actHTML + '</button>');
+    }
+
+    var tail = (7 - ((lead + monthLen) % 7)) % 7;
+    for (var j = 0; j < tail; j++) cells.push('<div class="cal-cell is-blank"></div>');
+
+    $('#calGrid').innerHTML = cells.join('');
+
+    var summary = '';
+    if (r) {
+      summary =
+        '<div><div class="k">實際當值</div><div class="v">' + fmtHM(monthDuty) + '</div></div>' +
+        '<div><div class="k">OT</div><div class="v" style="color:' +
+        (monthOt > 0 ? 'var(--amber)' : 'var(--text-dim)') + '">' + (monthOt > 0 ? '+' : '') + fmtHM(monthOt) + '</div></div>' +
+        '<div><div class="k">當值日數</div><div class="v">' + workedDays + '</div></div>';
+    } else {
+      summary = '<div style="flex:1;font-size:12px;color:var(--text-faint);line-height:1.6">' +
+        (totalDays ? '' : '仲未讀到 ' + year + ' 年嘅更表。撳右上角重新整理，或者去更表 App 睇下發佈咗未。') + '</div>';
+    }
+    $('#calSummary').innerHTML = summary;
+    $('#calSummary').style.display = summary ? '' : 'none';
+  }
+
+  function openRosterDay(key) {
+    var d = new Date(key + 'T00:00:00');
+    var sh = rosterFor(d.getFullYear()) ? rosterFor(d.getFullYear()).days[key] : null;
+    var st = dayStats(d.getTime());
+    var rows = state.entries.filter(function (e) {
+      return dayKey(e.s) === key;
+    }).sort(function (a, b) { return b.s - a.s; });
+
+    var html =
+      '<div style="display:flex;gap:12px;align-items:center;margin-bottom:14px">' +
+      '<div style="flex:1"><div style="font-size:20px;font-weight:800">' + fmtDateLabel(d.getTime()) + '</div>' +
+      '<div style="font-size:12.5px;color:var(--text-faint);margin-top:2px">' +
+      (sh ? rosterLabel(sh) : '未編排更份') + '</div></div>' +
+      '<div style="text-align:right"><div class="mono" style="font-size:19px;font-weight:600">' +
+      (st.total ? fmtHM(st.total) : '—') + '</div>' +
+      '<div style="font-size:10.5px;color:var(--text-faint)">實際當值</div></div></div>' +
+      (st.ot > 0 ? '<div class="note-box" style="margin-bottom:12px"><svg><use href="#i-bolt"/></svg>' +
+        '<span>呢日 OT <b style="color:var(--amber)">+' + fmtHM(st.ot) + '</b>' +
+        (st.target > 0 ? '（目標 ' + fmtHM(st.target) + '）' : '（休息日）') + '</span></div>' : '') +
+      (sh && sh.note ? '<div class="note-box" style="margin-bottom:12px"><svg><use href="#i-info"/></svg><span>' +
+        esc(sh.note) + '</span></div>' : '') +
+      '<div class="section-head" style="margin:4px 0 8px"><h2>當日紀錄</h2><span class="count">' +
+      (rows.length ? rows.length + ' 項' : '') + '</span></div>' +
+      (rows.length ? '<div class="timeline">' + rows.map(rowHTML).join('') + '</div>'
+        : '<p class="muted" style="font-size:12.5px;padding:6px 2px">冇紀錄</p>') +
+      '<a class="btn btn-ghost btn-block" style="margin-top:14px" href="' + ROSTER.editorUrl +
+      '" target="_blank" rel="noopener">' + ic('i-edit') + '去更表 App 睇／改</a>';
+
+    openSheet('更表', html);
+  }
+
+  function shiftCal(delta) {
+    var d = new Date(calYear, calMonth + delta, 1);
+    calYear = d.getFullYear();
+    calMonth = d.getMonth();
+    renderRoster();
+    if (!rosterFor(calYear)) {
+      fetchRoster(calYear, false).then(function () { renderRoster(); });
+    }
+  }
   function renderSettings() {
     $('#nameVal').textContent = state.settings.name || '未設定';
     var th = $('#targetH'), tm = $('#targetM');
@@ -741,6 +1017,7 @@
     renderCases();
     renderLog();
     renderStats();
+    renderRoster();
     renderSettings();
     var t = activeEntry();
     document.body.classList.toggle('is-working', !!t);
@@ -1078,7 +1355,7 @@
         on != null ? fmtTime(on) : '',
         off != null ? fmtTime(off) : '',
         st.total ? fmtHM(st.total) : '',
-        hmToStr(state.settings.target),
+        st.target ? fmtHM(st.target) : (st.shift ? '' : hmToStr(state.settings.target)),
         st.ot ? fmtHM(st.ot) : '',
         st.meal ? fmtHM(st.meal) : '',
         Object.keys(caseCount).length || ''
@@ -1197,8 +1474,14 @@
   function go(tab) {
     $$('.view').forEach(function (v) { v.classList.toggle('is-on', v.id === 'view-' + tab); });
     $$('.tab').forEach(function (b) { b.classList.toggle('is-on', b.dataset.tab === tab); });
+    var gear = $('#btnGotoSettings');
+    if (gear) gear.classList.toggle('is-on', tab === 'settings');
     window.scrollTo(0, 0);
     if (tab === 'stats') renderStats();
+    if (tab === 'roster') {
+      renderRoster();
+      ensureRoster(false).then(function () { if (calYear === new Date().getFullYear()) renderRoster(); });
+    }
   }
 
   /* ---------------- 螢幕長亮 ---------------- */
@@ -1237,9 +1520,9 @@
       big.textContent = parts[0] + ':' + parts[1];
       $('#dutySec').textContent = ':' + parts[2];
       if (st.open) {
-        var pct = Math.min(100, (st.total / targetMs()) * 100);
+        var pct = st.target > 0 ? Math.min(100, (st.total / st.target) * 100) : 100;
         $('#dutyBar').style.width = (st.total > 0 ? Math.max(1.5, pct) : 0) + '%';
-        $('#dutyProgress').classList.toggle('is-ot', st.total > targetMs());
+        $('#dutyProgress').classList.toggle('is-ot', st.target > 0 && st.total > st.target);
       }
     }
   }
@@ -1310,6 +1593,14 @@
         setTimeout(function () { startActivity(el.dataset.type, null); }, 180);
         break;
       case 'ed-type': toggleEditorType(el); break;
+      case 'cal-prev': shiftCal(-1); break;
+      case 'cal-next': shiftCal(1); break;
+      case 'cal-today':
+        calYear = new Date().getFullYear();
+        calMonth = new Date().getMonth();
+        renderRoster();
+        break;
+      case 'cal-day': openRosterDay(el.dataset.key); break;
       case 'welcome-start': closeSheet(); break;
       case 'welcome-demo': closeSheet(); setTimeout(seedDemo, 260); break;
       case 'range-apply': applyRange(); break;
@@ -1376,6 +1667,23 @@
   });
   $('#btnExportCsv').onclick = exportCsv;
   $('#btnExportJson').onclick = exportJson;
+
+  // 更表
+  var btnRefresh = $('#btnRosterRefresh');
+  if (btnRefresh) {
+    btnRefresh.onclick = function () {
+      var y = calYear || new Date().getFullYear();
+      var before = (rosterFor(y) || {}).at || 0;
+      btnRefresh.style.opacity = '.45';
+      fetchRoster(y, true).then(function (r) {
+        btnRefresh.style.opacity = '';
+        renderRoster();
+        if (r && r.at > before) toast('更表已更新');
+        else toast('更表更新失敗，用返上次資料');
+      });
+    };
+  }
+  $('#btnRosterEdit').href = ROSTER.editorUrl;
 
   // 設定
   $('#setName').onclick = function () {
@@ -1520,6 +1828,10 @@
       if (!document.hidden) { renderAll(); if (isOnDuty()) wakeLock(true); }
     });
     window.addEventListener('focus', function () { renderAll(); });
+    window.addEventListener('online', function () { ensureRoster(true).then(renderAll); });
+
+    // 讀更表（有快取先用，背景更新）
+    ensureRoster(false).then(function () { renderAll(); });
 
     // 每日跨日重畫
     var lastDay = startOfDay(now());
