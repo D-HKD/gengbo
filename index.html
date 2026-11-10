@@ -176,8 +176,7 @@
         <div class="progress" id="dutyProgress"><i id="dutyBar"></i></div>
         <div class="hero-meta">
           <span class="shift-chip hidden" id="shiftChip"></span>
-          <span id="legendStart">未開始</span>
-          <span class="sep">·</span>
+          <button class="shift-times" id="shiftTimes" data-act="shift-edit">未開始</button>
           <span id="legendTarget">目標 9:36</span>
         </div>
 
@@ -203,7 +202,7 @@
       <div class="actions-grid" id="actionsGrid"></div>
 
       <div class="section-head">
-        <h2>今日紀錄</h2>
+        <h2 id="todayTitle">今日紀錄</h2>
         <a class="link" href="#" data-goto="log">全部 <span id="todayCount"></span></a>
       </div>
       <div class="timeline" id="todayList"></div>
@@ -454,7 +453,7 @@
 
       <div class="spacer"></div>
       <p class="muted" style="text-align:center;font-size:11.5px;line-height:1.8">
-        更簿 v1.0 · 開源喺 GitHub<br>
+        更簿 v1.2 · 開源喺 GitHub<br>
         <a href="https://github.com/" target="_blank" rel="noopener" id="repoLink" style="display:inline-flex;align-items:center;gap:5px;margin-top:4px">
           <svg style="width:14px;height:14px"><use href="#i-github"/></svg>原始碼
         </a>
