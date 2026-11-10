@@ -1,5 +1,5 @@
 /* 更簿 service worker — 離線快取 app shell */
-const CACHE = 'gengbo-v1.1.0';
+const CACHE = 'gengbo-v1.2.0';
 const ASSETS = [
   './',
   './index.html',
