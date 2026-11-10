@@ -300,19 +300,51 @@
 
   function dutySessions() {
     var evs = state.entries.filter(function (e) { return e.t === 'on' || e.t === 'off'; });
-    var out = [], cur = null;
+    var out = [], cur = null, curOn = null;
     for (var i = 0; i < evs.length; i++) {
       var e = evs[i];
       if (e.t === 'on') {
-        if (cur != null) out.push({ start: cur, end: e.s, open: false });
+        if (cur != null) out.push({ start: cur, end: e.s, open: false, onId: curOn, offId: null });
         cur = e.s;
+        curOn = e.id;
       } else if (e.t === 'off' && cur != null) {
-        out.push({ start: cur, end: e.s, open: false });
+        out.push({ start: cur, end: e.s, open: false, onId: curOn, offId: e.id });
         cur = null;
+        curOn = null;
       }
     }
-    if (cur != null) out.push({ start: cur, end: null, open: true });
+    if (cur != null) out.push({ start: cur, end: null, open: true, onId: curOn, offId: null });
     return out;
+  }
+
+  function lastSession() {
+    var s = dutySessions();
+    return s.length ? s[s.length - 1] : null;
+  }
+
+  /* 首頁聚焦嘅日子：進行中／剛完成嘅更次所屬嗰日 */
+  function heroDay() {
+    var t = now();
+    var s = lastSession();
+    if (!s) return startOfDay(t);
+    if (s.open) return startOfDay(s.start);
+    if (s.end && t - s.end < 12 * 3600e3 && startOfDay(s.start) !== startOfDay(t)) {
+      return startOfDay(s.start);
+    }
+    return startOfDay(t);
+  }
+
+  /* 更表上該更嘅收工時間（跨夜會自動加一日） */
+  function scheduleEndFor(sessionStart) {
+    var sh = shiftOn(startOfDay(sessionStart));
+    if (!sh || sh.type === 'OFF' || !sh.start || !sh.end) return null;
+    var hm = String(sh.end).split(':');
+    if (hm.length < 2) return null;
+    var d = new Date(startOfDay(sessionStart));
+    d.setHours(Number(hm[0]), Number(hm[1]), 0, 0);
+    var t = d.getTime();
+    if (t <= sessionStart) t += DAY;
+    return t;
   }
 
   function isOnDuty() {
@@ -364,7 +396,11 @@
 
   function periodRange(period, custom) {
     var t = now(), from, to;
-    if (period === 'today') { from = startOfDay(t); to = from + DAY; }
+    if (period === 'today') {
+      // 跨夜更：跟返首頁顯示嗰一日，唔會變咗 0
+      from = heroDay();
+      to = from + DAY;
+    }
     else if (period === 'week') { from = startOfWeek(t); to = from + 7 * DAY; }
     else if (period === 'month') {
       var d = new Date(t); d.setDate(1); d.setHours(0, 0, 0, 0);
@@ -461,19 +497,48 @@
     toast('返工 ' + fmtTime(now()));
   }
 
-  function clockOut() {
+  function clockOut(at) {
+    at = at || now();
     haptic();
-    if (!isOnDuty() && !openSession()) { toast('你未返工'); return; }
+    if (!isOnDuty()) { toast('你未返工'); return; }
     var a = activeEntry();
     var extra = '';
     if (a) {
-      closeActive(now());
+      closeActive(at);
       extra = '（已完結' + TYPES[a.t].label + '）';
     }
-    addEntry({ id: uid(), t: 'off', s: now(), e: now() });
+    addEntry({ id: uid(), t: 'off', s: at, e: at });
     renderAll();
     wakeLock(false);
-    toast('放工 ' + fmtTime(now()) + extra);
+    toast('放工 ' + fmtTime(at) + extra);
+  }
+
+  function askClockOut() {
+    var sess = lastSession();
+    var act = activeEntry();
+    var t0 = now();
+    var schedEnd = sess ? scheduleEndFor(sess.start) : null;
+    var late = schedEnd && t0 - schedEnd > 60 * 60000;
+    var tail = act ? '　進行中嘅「' + TYPES[act.t].label + '」會一併完結。' : '';
+
+    if (late) {
+      askConfirm({
+        title: '放工',
+        body: '更表寫 ' + fmtTime(schedEnd) + ' 收工，而家已經 ' + fmtTime(t0) +
+          '（多咗 ' + fmtHM(t0 - schedEnd) + '）。' + tail,
+        ok: '用更表時間 ' + fmtTime(schedEnd),
+        alt: '用而家時間 ' + fmtTime(t0)
+      }).then(function (c) {
+        if (!c) return;
+        clockOut(c === 'alt' ? now() : schedEnd);
+      });
+    } else {
+      askConfirm({
+        title: '放工',
+        body: '確認 ' + fmtTime(t0) + ' 放工？' + tail,
+        ok: '放工'
+      }).then(function (yes) { if (yes) clockOut(t0); });
+    }
   }
 
   function startActivity(type, caseId) {
@@ -511,8 +576,8 @@
   }
 
   /* ---------------- 畫面：Home ---------------- */
-  function statusOf(st) {
-    if (st.open) return { on: true, text: '當值中' };
+  function statusOf() {
+    if (isOnDuty()) return { on: true, text: '當值中' };
     var today = startOfDay(now());
     var last = null;
     for (var i = state.entries.length - 1; i >= 0; i--) {
@@ -525,13 +590,14 @@
 
   function renderHome() {
     var t = now();
-    var day = startOfDay(t);
+    var day = heroDay();
     var st = dayStats(day);
-    var status = statusOf(st);
+    var status = statusOf();
     var sh = st.shift;
     var hero = $('#hero');
+    var isToday = day === startOfDay(t);
 
-    if (!status.on && sh && sh.type === 'OFF') status = { on: false, text: '今日休息' };
+    if (!status.on && sh && sh.type === 'OFF' && isToday) status = { on: false, text: '今日休息' };
 
     hero.classList.toggle('is-on', status.on);
 
@@ -539,7 +605,7 @@
     pill.innerHTML = '<i class="pip"></i><span>' + status.text + '</span>';
 
     var chip = $('#shiftChip');
-    if (sh) {
+    if (sh && isToday) {
       var stype = SHIFT_TYPE[sh.type];
       chip.className = 'shift-chip t-' + (stype ? stype.cls : 'off');
       chip.textContent = rosterLabel(sh);
@@ -552,7 +618,9 @@
     var parts = fmtHMS(total).split(':');
     $('#dutyBig').textContent = parts[0] + ':' + parts[1];
     $('#dutySec').textContent = ':' + parts[2];
-    $('#dutyUnit').textContent = status.on ? '今日當值' : '今日總當值';
+    $('#dutyUnit').textContent = status.on
+      ? (isToday ? '今更' : '今更')
+      : (isToday ? '今日總當值' : fmtDateShort(day) + ' 當值');
 
     var tgt = st.target;
     var pct = tgt > 0 ? Math.min(100, (total / tgt) * 100) : (total > 0 ? 100 : 0);
@@ -560,12 +628,17 @@
     $('#dutyBar').style.width = (total > 0 ? Math.max(1.5, pct) : 0) + '%';
     prog.classList.toggle('is-ot', tgt > 0 && total > tgt);
 
-    var firstOn = null;
-    for (var i = 0; i < state.entries.length; i++) {
-      var e = state.entries[i];
-      if (e.t === 'on' && e.s >= day) { firstOn = e; break; }
+    // 返工–放工 時間（可撳入去改）
+    var sess = lastSession();
+    var sameDay = sess && startOfDay(sess.start) === day;
+    var timesBtn = $('#shiftTimes');
+    if (sameDay) {
+      timesBtn.innerHTML = fmtTime(sess.start) + ' – ' +
+        (sess.end != null ? fmtTime(sess.end) : '進行中') + ic('i-chevron');
+    } else {
+      timesBtn.innerHTML = '未開始' + ic('i-chevron');
     }
-    $('#legendStart').textContent = firstOn ? '返工 ' + fmtTime(firstOn.s) : '未開始';
+
     if (tgt <= 0) {
       $('#legendTarget').innerHTML = total > 0
         ? '<b class="ot">休息日開工 · OT +' + fmtHM(total) + '</b>'
@@ -576,7 +649,7 @@
       $('#legendTarget').innerHTML = '目標 <b>' + fmtHM(tgt) + '</b> · 尚餘 ' + fmtHM(tgt - total);
     }
 
-    $('#todayLabel').textContent = fmtDateLabel(t);
+    $('#todayLabel').textContent = isToday ? fmtDateLabel(t) : fmtDateLabel(day);
 
     // active strip
     var a = activeEntry();
@@ -612,15 +685,7 @@
     if (status.on) {
       btn.className = 'clock-btn is-off';
       btn.innerHTML = ic('i-door-out') + '<span>放工</span>';
-      btn.onclick = function () {
-        var act = activeEntry();
-        var msg = act
-          ? '而家仲記錄緊「' + TYPES[act.t].label + '」，放工會一併完結。'
-          : '確認而家放工？';
-        askConfirm({
-          title: '放工', body: msg, ok: '放工', danger: false
-        }).then(function (yes) { if (yes) clockOut(); });
-      };
+      btn.onclick = askClockOut;
     } else {
       btn.className = 'clock-btn';
       btn.innerHTML = ic('i-door-in') + '<span>返工</span>';
@@ -639,15 +704,17 @@
 
     $('#actionHint').textContent = a ? '撳返同一個掣即可完結' : '撳一下即開始計時';
 
-    // today's list
+    // 焦點日子嘅紀錄
     var todayEntries = state.entries.filter(function (e) { return e.s >= day && e.s < day + DAY; })
       .sort(function (x, y) { return y.s - x.s; });
     var list = $('#todayList');
     if (!todayEntries.length) {
-      list.innerHTML = emptyHTML('i-clock', '今日未有紀錄', '撳「返工」或上面嘅工作掣開始');
+      list.innerHTML = emptyHTML('i-clock', isToday ? '今日未有紀錄' : '呢日未有紀錄',
+        '撳「返工」或上面嘅工作掣開始');
     } else {
       list.innerHTML = todayEntries.slice(0, 12).map(rowHTML).join('');
     }
+    $('#todayTitle').textContent = isToday ? '今日紀錄' : fmtDateShort(day) + ' 紀錄';
     $('#todayCount').textContent = todayEntries.length ? '(' + todayEntries.length + ')' : '';
   }
 
@@ -1051,13 +1118,20 @@
   function askConfirm(opts) {
     return new Promise(function (resolve) {
       confirmResolve = resolve;
+      var buttons = opts.alt
+        ? '<button class="btn ' + (opts.danger ? 'btn-danger' : 'btn-primary') +
+          '" data-act="confirm" data-val="1">' + esc(opts.ok || '確定') + '</button>' +
+          '<button class="btn btn-ghost" data-act="confirm" data-val="alt">' + esc(opts.alt) + '</button>'
+        : '<button class="btn btn-ghost" data-act="confirm" data-val="0">取消</button>' +
+          '<button class="btn ' + (opts.danger ? 'btn-danger' : 'btn-primary') +
+          '" data-act="confirm" data-val="1">' + esc(opts.ok || '確定') + '</button>';
+
       openSheet(opts.title,
         '<p style="font-size:14px;line-height:1.65;color:var(--text-dim);margin-bottom:18px">' +
         esc(opts.body) + '</p>' +
-        '<div class="btn-row">' +
-        '<button class="btn btn-ghost" data-act="confirm" data-val="0">取消</button>' +
-        '<button class="btn ' + (opts.danger ? 'btn-danger' : 'btn-primary') +
-        '" data-act="confirm" data-val="1">' + esc(opts.ok || '確定') + '</button></div>');
+        '<div class="btn-row" style="flex-direction:column">' + buttons +
+        (opts.alt ? '<button class="btn btn-ghost" data-act="confirm" data-val="0">取消</button>' : '') +
+        '</div>');
     });
   }
 
@@ -1176,6 +1250,152 @@
     openSheet('選擇案件', html);
   }
 
+  /* ---------------- 更次（返工／放工）---------------- */
+  var shiftEditing = null;
+
+  function byId(id) {
+    for (var i = 0; i < state.entries.length; i++) if (state.entries[i].id === id) return state.entries[i];
+    return null;
+  }
+
+  function sessionOfEntry(ent) {
+    if (!ent) return null;
+    var ss = dutySessions();
+    for (var i = 0; i < ss.length; i++) {
+      if (ss[i].onId === ent.id || ss[i].offId === ent.id) return ss[i];
+    }
+    return null;
+  }
+
+  function openShiftEditor(session) {
+    shiftEditing = session || null;
+    var isNew = !session;
+    var start, end;
+
+    if (isNew) {
+      var last = lastSession();
+      if (last && last.open) {
+        start = last.start;
+        end = scheduleEndFor(start) || now();
+      } else {
+        start = now() - 9 * 3600e3;
+        end = now();
+      }
+    } else {
+      start = session.start;
+      end = session.end;
+      if (end == null) {
+        var sch = scheduleEndFor(start);
+        // 已經過咗更表收工時間就預先填入；未到就留空（仲做緊）
+        end = sch != null && sch <= now() ? sch : null;
+      }
+    }
+
+    var html =
+      (isNew ? '<p class="hint" style="margin:0 0 12px">補錄一更嘅返工同放工時間。放工留空＝仲未收工。</p>' : '') +
+      '<div class="field-row">' +
+      '<div class="field"><label>返工日期</label><input class="input" id="shStartDate" type="date" value="' +
+      fmtDateInput(start) + '"></div>' +
+      '<div class="field"><label>返工時間</label><input class="input" id="shStartTime" type="time" value="' +
+      fmtTimeInput(start) + '"></div></div>' +
+      '<div class="field-row">' +
+      '<div class="field"><label>放工日期</label><input class="input" id="shEndDate" type="date" value="' +
+      (end != null ? fmtDateInput(end) : '') + '"></div>' +
+      '<div class="field"><label>放工時間</label><input class="input" id="shEndTime" type="time" value="' +
+      (end != null ? fmtTimeInput(end) : '') + '"></div></div>' +
+      '<div class="hint" id="shHint"></div>' +
+      '<div class="btn-row" style="margin-top:8px">' +
+      '<button class="btn btn-ghost btn-sm" data-act="sh-now">' + ic('i-clock') + '而家放工</button>' +
+      '<button class="btn btn-ghost btn-sm" data-act="sh-clear">清除放工時間</button></div>' +
+      '<div class="hint" style="margin-top:10px">跨夜更照填就得：放工日期揀第二日，或者時間早過返工會自動當翌日。</div>' +
+      '<div class="btn-row" style="margin-top:16px">' +
+      (isNew ? '' : '<button class="btn btn-danger" data-act="shift-del">刪除整更</button>') +
+      '<button class="btn btn-primary" data-act="shift-save">儲存</button></div>';
+
+    openSheet(isNew ? '補錄更次' : '更改更次', html);
+    updateShiftHint();
+  }
+
+  function updateShiftHint() {
+    var sd = $('#shStartDate'), st = $('#shStartTime'), ed = $('#shEndDate'), et = $('#shEndTime');
+    var hint = $('#shHint');
+    if (!sd || !st || !hint) return;
+    var start = parseDateTime(sd.value, st.value);
+    if (start == null) { hint.textContent = ''; return; }
+    if (!et.value) {
+      hint.innerHTML = '留空放工時間 = <b>仲未收工</b>，會繼續計時。';
+      return;
+    }
+    var end = parseDateTime(ed.value || sd.value, et.value);
+    if (end == null) { hint.textContent = ''; return; }
+    var nextDay = end <= start;
+    if (nextDay) end += DAY;
+    hint.innerHTML = '本更 <b>' + fmtHM(end - start) + '</b>' +
+      (nextDay ? ' · 放工當翌日（' + fmtDateShort(end) + '）' : '') +
+      (end > now() ? ' · 未到放工時間' : '');
+  }
+
+  function saveShift() {
+    var sd = $('#shStartDate').value;
+    var st = $('#shStartTime').value;
+    var ed = $('#shEndDate').value;
+    var et = $('#shEndTime').value;
+    if (!sd || !st) { toast('請填返工日期同時間'); return; }
+    var start = parseDateTime(sd, st);
+    if (start == null) { toast('返工時間格式有問題'); return; }
+
+    var end = null;
+    if (et) {
+      end = parseDateTime(ed || sd, et);
+      if (end == null) { toast('放工時間格式有問題'); return; }
+      if (end <= start) end += DAY;
+    }
+
+    var sess = shiftEditing;
+    if (sess && sess.onId) {
+      var on = byId(sess.onId);
+      if (on) { on.s = start; on.e = start; }
+      var off = sess.offId ? byId(sess.offId) : null;
+      if (end != null) {
+        if (off) { off.s = end; off.e = end; }
+        else addEntry({ id: uid(), t: 'off', s: end, e: end });
+      } else if (off) {
+        state.entries = state.entries.filter(function (x) { return x.id !== off.id; });
+      }
+    } else {
+      addEntry({ id: uid(), t: 'on', s: start, e: start });
+      if (end != null) addEntry({ id: uid(), t: 'off', s: end, e: end });
+    }
+
+    // 進行中嘅工作唔應該長過放工時間
+    var act = activeEntry();
+    if (act && end != null && act.s >= start && act.s < end) {
+      act.e = Math.max(end, act.s + 60000);
+    }
+
+    state.entries.sort(byStart);
+    save(); closeSheet(); renderAll();
+    toast(end != null ? '已更新：' + fmtHM(end - start) + ' 更' : '已更新（未收工）');
+  }
+
+  function deleteShift() {
+    var sess = shiftEditing;
+    if (!sess) return;
+    askConfirm({
+      title: '刪除整更',
+      body: '會刪除呢一更嘅返工同放工紀錄（工作內容會保留）。確定？',
+      ok: '刪除', danger: true
+    }).then(function (yes) {
+      if (!yes) return;
+      var ids = {};
+      if (sess.onId) ids[sess.onId] = 1;
+      if (sess.offId) ids[sess.offId] = 1;
+      state.entries = state.entries.filter(function (x) { return !ids[x.id]; });
+      save(); closeSheet(); renderAll();
+      toast('已刪除整更');
+    });
+  }
+
   /* ---------------- 新增 / 編輯紀錄 ---------------- */
   function openEditor(id) {
     var e = id ? state.entries.filter(function (x) { return x.id === id; })[0] : null;
@@ -1211,6 +1431,8 @@
       '<div class="field"><label>案件</label><select class="select" id="edCase">' + caseOpts + '</select></div>' +
       '<div class="field"><label>備註</label><input class="input" id="edNote" placeholder="簡短描述（選填）" value="' +
       esc(draft.n || '') + '"></div>' +
+      (isNew ? '<button class="btn btn-ghost btn-block" style="margin:2px 0 10px" data-act="open-shift-new">' +
+        ic('i-door-in') + '補錄返工／放工時間</button>' : '') +
       '<div class="btn-row" style="margin-top:4px">' +
       (isNew ? '' : '<button class="btn btn-danger" data-act="del-entry" data-id="' + id + '">刪除</button>') +
       '<button class="btn btn-primary" data-act="save-entry" data-id="' + (id || '') + '">' +
@@ -1419,6 +1641,7 @@
   function seedDemo() {
     closeSheet();
     var s = blankState();
+    s.rosters = state.rosters || {};
     s.settings.name = '陳 Sir';
     s.settings.seen = true;
     var cases = [
@@ -1513,7 +1736,7 @@
         if (e) node.textContent = fmtHM(t - e.s);
       });
     }
-    var st = dayStats(startOfDay(t));
+    var st = dayStats(heroDay());
     var big = $('#dutyBig');
     if (big) {
       var parts = fmtHMS(st.total).split(':');
@@ -1539,10 +1762,43 @@
 
     switch (act) {
       case 'type': tapType(el.dataset.type); break;
-      case 'edit': openEditor(el.dataset.id); break;
+      case 'edit':
+        (function () {
+          var ent = byId(el.dataset.id);
+          if (ent && (ent.t === 'on' || ent.t === 'off')) {
+            openShiftEditor(sessionOfEntry(ent));
+          } else {
+            openEditor(el.dataset.id);
+          }
+        })();
+        break;
+      case 'shift-edit': openShiftEditor(lastSession()); break;
+      case 'shift-save': saveShift(); break;
+      case 'shift-del': deleteShift(); break;
+      case 'sh-now':
+        (function () {
+          var t = now();
+          $('#shEndDate').value = fmtDateInput(t);
+          $('#shEndTime').value = fmtTimeInput(t);
+          updateShiftHint();
+        })();
+        break;
+      case 'sh-clear':
+        $('#shEndDate').value = '';
+        $('#shEndTime').value = '';
+        updateShiftHint();
+        break;
+      case 'open-shift-new':
+        closeSheet();
+        setTimeout(function () { openShiftEditor(null); }, 200);
+        break;
       case 'case': openCaseDetail(el.dataset.id); break;
       case 'confirm':
-        if (confirmResolve) { var r = confirmResolve; confirmResolve = null; r(el.dataset.val === '1'); }
+        if (confirmResolve) {
+          var r = confirmResolve;
+          confirmResolve = null;
+          r(el.dataset.val === '1' ? true : el.dataset.val === 'alt' ? 'alt' : false);
+        }
         closeSheet();
         break;
       case 'save-case': saveCase(el.dataset.id || null); break;
@@ -1628,6 +1884,14 @@
 
   $('#sheetClose').onclick = closeSheet;
   $('#backdrop').onclick = closeSheet;
+
+  // 更次表單即時更新「本更」時數
+  $('#sheetBody').addEventListener('input', function (ev) {
+    if (/^sh(Start|End)(Date|Time)$/.test(ev.target.id)) updateShiftHint();
+  });
+  $('#sheetBody').addEventListener('change', function (ev) {
+    if (/^sh(Start|End)(Date|Time)$/.test(ev.target.id)) updateShiftHint();
+  });
   document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape' && sheetOpen) closeSheet();
   });
